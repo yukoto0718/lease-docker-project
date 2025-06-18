@@ -1,0 +1,185 @@
+version: '3.8'
+
+services:
+  # MySQL数据库 - 超轻量配置
+  mysql:
+    image: mysql:8.0
+    container_name: lease-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      TZ: Asia/Shanghai
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - lease-network
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --innodb-buffer-pool-size=32M
+      --innodb-log-file-size=16M
+      --max-connections=20
+      --table-open-cache=64
+      --query-cache-size=0
+      --query-cache-type=0
+      --skip-name-resolve
+    deploy:
+      resources:
+        limits:
+          memory: 80M
+        reservations:
+          memory: 60M
+
+  # MinIO对象存储 - 超轻量配置
+  minio:
+    image: minio/minio:latest
+    container_name: lease-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    networks:
+      - lease-network
+    command: server /data --console-address ":9001"
+    deploy:
+      resources:
+        limits:
+          memory: 50M
+        reservations:
+          memory: 30M
+
+  # Redis缓存 - 超轻量配置
+  redis:
+    image: redis:alpine
+    container_name: lease-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    networks:
+      - lease-network
+    command: >
+      redis-server 
+      --maxmemory 20mb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --appendonly yes
+    deploy:
+      resources:
+        limits:
+          memory: 25M
+        reservations:
+          memory: 15M
+
+  # 后端Admin服务 - 极度优化JVM
+  web-admin:
+    build:
+      context: ./backend/admin
+      dockerfile: Dockerfile.micro
+    container_name: lease-web-admin
+    restart: unless-stopped
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${MYSQL_DATABASE}
+      DB_USERNAME: ${MYSQL_USER}
+      DB_PASSWORD: ${MYSQL_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: lease
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      SPRING_PROFILE: prod
+    depends_on:
+      - mysql
+      - minio
+      - redis
+    networks:
+      - lease-network
+    deploy:
+      resources:
+        limits:
+          memory: 200M
+        reservations:
+          memory: 150M
+
+  # 后端App服务 - 极度优化JVM
+  web-app:
+    build:
+      context: ./backend/app
+      dockerfile: Dockerfile.micro
+    container_name: lease-web-app
+    restart: unless-stopped
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${MYSQL_DATABASE}
+      DB_USERNAME: ${MYSQL_USER}
+      DB_PASSWORD: ${MYSQL_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 1
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: mobile-lease
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      SPRING_PROFILE: prod
+    depends_on:
+      - mysql
+      - minio
+      - redis
+    networks:
+      - lease-network
+    deploy:
+      resources:
+        limits:
+          memory: 200M
+        reservations:
+          memory: 150M
+
+  # Nginx反向代理
+  nginx:
+    image: nginx:alpine
+    container_name: lease-nginx
+    restart: unless-stopped
+    volumes:
+      - ./nginx/conf.d/micro.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./frontend/h5-app:/usr/share/nginx/html/h5:ro
+      - ./frontend/admin:/usr/share/nginx/html/admin:ro
+    ports:
+      - "80:80"
+      - "8888:8888"
+    depends_on:
+      - web-admin
+      - web-app
+    networks:
+      - lease-network
+    deploy:
+      resources:
+        limits:
+          memory: 30M
+        reservations:
+          memory: 15M
+
+volumes:
+  mysql_data:
+  minio_data:
+  redis_data:
+
+networks:
+  lease-network:
+    driver: bridge

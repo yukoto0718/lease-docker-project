@@ -1,0 +1,19 @@
+FROM openjdk:17-jre-alpine
+
+# 安装curl用于健康检查
+RUN apk add --no-cache curl
+
+WORKDIR /app
+
+# 复制JAR文件
+COPY *.jar app.jar
+
+# 超轻量JVM参数
+ENV JAVA_OPTS="-Xmx150m -Xms100m -XX:+UseSerialGC -XX:MaxMetaspaceSize=80m -Djava.awt.headless=true -Djava.security.egd=file:/dev/./urandom"
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=120s --timeout=30s --start-period=180s --retries=3 \
+  CMD curl -f http://localhost:8080/actuator/health || exit 1
+
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
