@@ -1,0 +1,1 @@
+function u(o){const f=o instanceof Date?o:new Date(o),a=new Date().getTime()-f.getTime(),s=Math.floor(a/1e3);if(s<60)return"刚刚";const n=Math.floor(s/60);if(n<60)return`${n}分钟前`;const e=Math.floor(n/60);if(e<24)return`${e}小时前`;const t=Math.floor(e/24);if(t<30)return t===1?"昨天":`${t}天前`;const r=Math.floor(t/30);return r<12?`${r}个月前`:`${Math.floor(r/12)}年前`}export{u as f};
