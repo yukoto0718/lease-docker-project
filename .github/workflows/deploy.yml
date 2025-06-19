@@ -1,0 +1,39 @@
+name: Auto Deploy to EC2
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 🚀 Deploy to EC2
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ec2-user
+        key: ${{ secrets.EC2_PRIVATE_KEY }}
+        script: |
+          echo "🔄 开始自动部署..."
+          cd /home/ec2-user/lease-docker-project
+          
+          echo "📥 拉取最新代码..."
+          git pull origin main
+          
+          echo "🛑 停止旧服务..."
+          docker-compose -f docker-compose.fixed.yml down
+          
+          echo "🔨 重新构建并启动..."
+          docker-compose -f docker-compose.fixed.yml up -d --build
+          
+          echo "⏰ 等待服务启动..."
+          sleep 60
+          
+          echo "🏥 健康检查..."
+          curl -f http://localhost:8080/actuator/health && echo "✅ Admin服务正常" || echo "❌ Admin服务异常"
+          curl -f http://localhost:8081/actuator/health && echo "✅ App服务正常" || echo "❌ App服务异常"
+          curl -f http://localhost && echo "✅ 前端服务正常" || echo "❌ 前端服务异常"
+          
+          echo "🎉 部署完成！"

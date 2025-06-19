@@ -1,0 +1,156 @@
+version: '3.8'
+
+services:
+  # MySQL 8.0 - 兼容配置
+  mysql:
+    image: mysql:8.0
+    container_name: lease-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      TZ: Asia/Shanghai
+    volumes:
+      - ./data/mysql:/var/lib/mysql
+    networks:
+      - lease-network
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --innodb-buffer-pool-size=128M
+      --innodb-log-file-size=32M
+      --max-connections=50
+      --table-open-cache=128
+      --skip-name-resolve
+      --sql-mode=STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO
+      --innodb-use-native-aio=0
+    # 完全移除内存限制
+
+  # Redis - 简化配置
+  redis:
+    image: redis:alpine
+    container_name: lease-redis
+    restart: unless-stopped
+    volumes:
+      - ./data/redis:/data
+    networks:
+      - lease-network
+    command: >
+      redis-server 
+      --appendonly yes
+      --save 900 1
+
+  # MinIO - 简化配置
+  minio:
+    image: minio/minio:latest
+    container_name: lease-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - ./data/minio:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    networks:
+      - lease-network
+    command: server /data --console-address ":9001"
+
+  # 后端Admin服务
+  web-admin:
+    build:
+      context: ./backend/admin
+      dockerfile: Dockerfile.micro
+    container_name: lease-web-admin
+    restart: unless-stopped
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${MYSQL_DATABASE}
+      DB_USERNAME: root
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      MINIO_ENDPOINT: http://52.197.246.235:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: lease
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      SPRING_PROFILE: prod
+    depends_on:
+      - mysql
+      - redis
+    networks:
+      - lease-network
+
+  # 后端App服务
+  web-app:
+    build:
+      context: ./backend/app
+      dockerfile: Dockerfile.micro
+    container_name: lease-web-app
+    restart: unless-stopped
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${MYSQL_DATABASE}
+      DB_USERNAME: root
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 1
+      MINIO_ENDPOINT: http://52.197.246.235:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: mobile-lease
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      SPRING_PROFILE: prod
+    depends_on:
+      - mysql
+      - redis
+    networks:
+      - lease-network
+
+  # Nginx前端
+  nginx:
+    image: nginx:alpine
+    container_name: lease-nginx
+    restart: unless-stopped
+    volumes:
+      - ./nginx/conf.d/micro.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./frontend/h5-app:/usr/share/nginx/html/h5:ro
+      - ./frontend/admin:/usr/share/nginx/html/admin:ro
+    ports:
+      - "80:80"
+      - "8888:8888"
+    depends_on:
+      - web-admin
+      - web-app
+    networks:
+      - lease-network
+
+  # 数据库管理工具Adminer
+  adminer:
+    image: adminer
+    container_name: lease-adminer
+    restart: unless-stopped
+    ports:
+      - "8082:8080"
+    networks:
+      - lease-network
+    depends_on:
+      - mysql
+
+volumes:
+  mysql_data:
+  minio_data:
+  redis_data:
+
+networks:
+  lease-network:
+    driver: bridge
