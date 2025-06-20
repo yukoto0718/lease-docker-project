@@ -1,0 +1,1 @@
+function e(){const t=new Date().getHours();return t<9||t<=11?"おはようございます":t<=13||t<20?"こんにちは":"こんばんは"}function o(){const n=["お仕事頑張ってください","コーヒーでも一杯いかがですか","少し休憩しませんか","何を食べますか","立ち上がって動いてみませんか"],t=Math.floor(Math.random()*n.length);return n[t]}export{e as t,o as w};
