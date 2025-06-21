@@ -62,7 +62,7 @@ services:
   web-admin:
     build:
       context: ./backend/admin
-      dockerfile: Dockerfile.micro
+      dockerfile: Dockerfile
     container_name: lease-web-admin
     restart: unless-stopped
     environment:
@@ -91,7 +91,7 @@ services:
   web-app:
     build:
       context: ./backend/app
-      dockerfile: Dockerfile.micro
+      dockerfile: Dockerfile
     container_name: lease-web-app
     restart: unless-stopped
     environment:
