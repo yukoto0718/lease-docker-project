@@ -62,7 +62,7 @@ services:
   web-admin:
     build:
       context: ./backend/admin
-      dockerfile: Dockerfile.micro
+      dockerfile: Dockerfile
     container_name: lease-web-admin
     restart: unless-stopped
     environment:
@@ -74,7 +74,7 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_DB: 0
-      MINIO_ENDPOINT: http://52.197.246.235:9000
+      MINIO_ENDPOINT: http://57.183.57.12:9000
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
       MINIO_BUCKET: lease
@@ -91,7 +91,7 @@ services:
   web-app:
     build:
       context: ./backend/app
-      dockerfile: Dockerfile.micro
+      dockerfile: Dockerfile
     container_name: lease-web-app
     restart: unless-stopped
     environment:
@@ -103,7 +103,7 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_DB: 1
-      MINIO_ENDPOINT: http://52.197.246.235:9000
+      MINIO_ENDPOINT: http://57.183.57.12:9000
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
       MINIO_BUCKET: mobile-lease
@@ -133,6 +133,18 @@ services:
       - web-app
     networks:
       - lease-network
+
+  # 数据库管理工具Adminer
+  adminer:
+    image: adminer
+    container_name: lease-adminer
+    restart: unless-stopped
+    ports:
+      - "8082:8080"
+    networks:
+      - lease-network
+    depends_on:
+      - mysql
 
 volumes:
   mysql_data:
